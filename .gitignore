@@ -1,0 +1,7 @@
+target/
+dbt_modules/
+dbt_packages/
+logs/
+verdant-bond*.json
+*credentials*.json
+NCDC_CDO_web_sebbrvices_token
