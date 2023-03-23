@@ -1,0 +1,36 @@
+
+version: 2
+
+models:
+    - name: measurement_type_dim
+      description: "Type of measurement, such as temperature or precipitation"
+      columns:
+          - name: id
+            description: "The primary key for this table"
+            tests:
+                - unique
+                - not_null
+    - name: station_dim
+      description: "Weather stations"
+      columns:
+          - name: id
+            description: "The primary key for this table"
+            tests:
+                - unique
+                - not_null
+    - name: measurement
+      description: "Measurements by station and date"
+      columns:
+          - name: station_id, measurement_type_id, measurement_date
+            description: "The primary key for this table"
+            tests:
+                - unique
+                - not_null
+    - name: temperature
+      description: "Temperatures by station and date"
+      columns:
+          - name: station_id, measurement_type_id, measurement_date
+            description: "The primary key for this table"
+            tests:
+                - unique
+                - not_null
