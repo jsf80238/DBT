@@ -1,3 +1,7 @@
+"""
+See API documentation at https://www.ncdc.noaa.gov/cdo-web/webservices/v2#data
+"""
+import sys
 from datetime import datetime, timedelta
 import json
 import logging
@@ -16,6 +20,7 @@ TOKEN_FILE = "NCDC_CDO_web_services_token"
 DATA_SET_ID = "GHCND"  # daily summaries
 COLORADO = "FIPS:08"
 STATIONS = "stations"
+DATATYPES = "datatypes"
 START_DATE = "startdate"
 END_DATE = "enddate"
 UNITS = "metric"
@@ -34,7 +39,7 @@ TOPIC = "weather"
 PUBSUB_TOPIC_NAME = f"projects/{PROJECT_ID}/topics/{TOPIC}"
 
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 handler = logging.StreamHandler()
 formatter = logging.Formatter('%(asctime)s | %(levelname)8s | %(message)s', datefmt='%Y-%m-%d %H:%M:%S %Z')
 handler.setFormatter(formatter)
@@ -63,10 +68,27 @@ def get(url,
     return response
 
 
+# Get the different measurement types we might see (NOAA calls them datatypes)
+url = f"{BASE_URL}/{DATATYPES}"
+param_dict = {
+    "locationid": COLORADO,
+    LIMIT: RECORD_LIMIT,
+    END_DATE: datetime(2000, 1, 1).strftime(STAMP_FORMAT),
+}
+logger.info(f"Getting {url} with parameters {param_dict} ...")
+response = get(url, headers=HEADER_DICT, params=param_dict)
+# print(json.dumps(response.json()["results"], sort_keys=True, indent=2))
+for datatype in response.json()[RESULTS]:
+    logger.debug(datatype)
+    continue
+    payload = json.dumps(datatype, sort_keys=True, indent=2).encode()
+    future = publisher.publish(PUBSUB_TOPIC_NAME, payload, record_type="datatype")
+    logger.info(f"Successfully posted message_id: {future.result()}.")
+sys.exit()
 # Iterate over each station in Colorado with data between January 1, 2000 and today
 # The enddate and startdate parameters below look reversed but they are correct,
 # see https://www.ncdc.noaa.gov/cdo-web/webservices/v2#stations.
-url = f"{BASE_URL}/stations"
+url = f"{BASE_URL}/{STATIONS}"
 param_dict = {
     "locationid": COLORADO,
     LIMIT: RECORD_LIMIT,
