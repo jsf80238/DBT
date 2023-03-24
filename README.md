@@ -1,3 +1,13 @@
+# DBT demonstration with GCP
+This code uses the following technologies:
+- Python and the [requests](https://requests.readthedocs.io/en/latest/) module
+- Google [PubSub](https://cloud.google.com/pubsub)
+- Google [BigQuery](https://cloud.google.com/bigquery)
+- [DBT (Cloud version)](https://cloud.getdbt.com)
+
+# Data Flow
+![data flow](images/DBT_and_GCP_Data_Flow.png)
+
 # Potential improvements
 - Run on a schedule
 - Use protobufs (https://protobuf.dev/)
@@ -12,4 +22,3 @@
 - performance
   - as weather_ods.measurement grows performance might degrade
   - add clustering key
-
