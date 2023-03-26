@@ -27,8 +27,8 @@ This code uses the following technologies:
 # Potential improvements
 - Run on a schedule via Google Run.
 - Use protobufs (https://protobuf.dev/)
-- The NOAA API limits results to 1000 items; add code to paginate to get all records
-- Query the database to determine what date to start from.
+- ~~The NOAA API limits results to 1000 items; add code to paginate to get all records.~~
+- Query the database to determine what date to start from (right now we just assume we will run at least every 7 days).
 - Put credentials file, logging level, etc. into a config file.
 - Put credentials file and NOAA REST API token into Google Secrets Manager.
 - Add comments to DDL.

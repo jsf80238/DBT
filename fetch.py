@@ -19,25 +19,21 @@ BASE_URL = "https://www.ncei.noaa.gov/cdo-web/api/v2"
 TOKEN_FILE = "NCDC_CDO_web_services_token"
 DATA_SET_ID = "GHCND"  # daily summaries
 COLORADO = "FIPS:08"
-STATIONS = "stations"
-DATATYPES = "datatypes"
 START_DATE = "startdate"
 END_DATE = "enddate"
-UNITS = "metric"
-LIMIT = "limit"
-RESULTS = "results"
-RECORD_LIMIT = 1000
 STAMP_FORMAT = "%Y-%m-%d"
-GET_DELAY = 1  # seconds between requests
-GET_TRY_COUNT = 3  # Total number of tries per REST call, including initial one
-GET_BACKOFF = 2  # Retry backoff delay ratio
 HEADER_DICT = {
     "token": open(TOKEN_FILE).read().strip(),
+    # "includemetadata": "false",
 }
 PROJECT_ID = "verdant-bond-262820"
 TOPIC = "weather"
 PUBSUB_TOPIC_NAME = f"projects/{PROJECT_ID}/topics/{TOPIC}"
 
+# Set up Google credentials
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(pathlib.Path(__file__).parent / GOOGLE_APPLICATION_CREDENTIALS_FILE)
+
+# Set up logging
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 handler = logging.StreamHandler()
@@ -46,58 +42,76 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 # handler.setLevel(logging.DEBUG)
 
-# Set up Google credentials
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(pathlib.Path(__file__).parent / GOOGLE_APPLICATION_CREDENTIALS_FILE)
-
-# Create publisher
-publisher = pubsub_v1.PublisherClient()
-
 
 @retry()
 def get(url,
         headers=HEADER_DICT,
         params=None,
-        tries=GET_TRY_COUNT,
-        delay=GET_DELAY,
-        backoff=GET_BACKOFF,
-        logger=logger
-        ):
-    # sleep(GET_DELAY)
-    response = requests.get(url, headers=headers, params=param_dict)
-    response.raise_for_status()
-    return response
+        tries=3,
+        delay=2,
+        backoff=2,
+        logger=logger,
+        ) -> list[dict]:
+    """
+    :param url: NOAA URL
+    :param headers: authentication
+    :param params: tells NOAA what data we want
+    :param tries: see https://pypi.org/project/retry/
+    :param delay: see https://pypi.org/project/retry/
+    :param backoff: see https://pypi.org/project/retry/
+    :param logger: see https://pypi.org/project/retry/
+    :return: the data from the API call
+    """
+    METADATA = "metadata"
+    OFFSET = "offset"
+    LIMIT = 1000
+    return_list = list()
+    offset = 1
+    params["limit"] = LIMIT  # See NOAA documentation
+    while True:
+        params[OFFSET] = offset
+        response = requests.get(url, headers=headers, params=param_dict)
+        response.raise_for_status()
+        # logger.debug(response.json()[METADATA])
+        return_list.extend(response.json()["results"])
+        total_available = response.json()[METADATA]["resultset"]["count"]
+        if total_available <= len(return_list):
+            logger.info(f"Fetched {len(return_list)} records from API.")
+            return return_list
+        offset += LIMIT
 
+
+# Set-up complete, program starts here
+# Create publisher
+publisher = pubsub_v1.PublisherClient()
 
 # Get the different measurement types we might see (NOAA calls them datatypes)
-url = f"{BASE_URL}/{DATATYPES}"
+url = f"{BASE_URL}/datatypes"
 param_dict = {
     "locationid": COLORADO,
-    LIMIT: RECORD_LIMIT,
     END_DATE: datetime(2000, 1, 1).strftime(STAMP_FORMAT),
 }
 logger.info(f"Getting {url} with parameters {param_dict} ...")
-response = get(url, headers=HEADER_DICT, params=param_dict)
-# print(json.dumps(response.json()["results"], sort_keys=True, indent=2))
-for datatype in response.json()[RESULTS]:
+data_list = get(url, headers=HEADER_DICT, params=param_dict)
+for datatype in data_list:
     logger.debug(datatype)
-    continue
     payload = json.dumps(datatype, sort_keys=True, indent=2).encode()
     future = publisher.publish(PUBSUB_TOPIC_NAME, payload, record_type="datatype")
     logger.info(f"Successfully posted message_id: {future.result()}.")
-sys.exit()
+
 # Iterate over each station in Colorado with data between January 1, 2000 and today
 # The enddate and startdate parameters below look reversed but they are correct,
 # see https://www.ncdc.noaa.gov/cdo-web/webservices/v2#stations.
-url = f"{BASE_URL}/{STATIONS}"
+url = f"{BASE_URL}/stations"
 param_dict = {
     "locationid": COLORADO,
-    LIMIT: RECORD_LIMIT,
     END_DATE: datetime(2000, 1, 1).strftime(STAMP_FORMAT),
     START_DATE: (datetime.today() - timedelta(7)).strftime(STAMP_FORMAT),
 }
 logger.info(f"Getting {url} with parameters {param_dict} ...")
-response = get(url, headers=HEADER_DICT, params=param_dict)
-for station in response.json()[RESULTS]:
+data_list = get(url, headers=HEADER_DICT, params=param_dict)
+
+for station in data_list:
     payload = json.dumps(station, sort_keys=True, indent=2).encode()
     future = publisher.publish(PUBSUB_TOPIC_NAME, payload, record_type="station")
     logger.info(f"Successfully posted message_id: {future.result()}.")
@@ -106,15 +120,14 @@ for station in response.json()[RESULTS]:
     param_dict = {
         "datasetid": DATA_SET_ID,
         "stationid": station["id"],
-        "units": UNITS,
-        LIMIT: RECORD_LIMIT,
+        "units": "metric",
         START_DATE: (datetime.today() - timedelta(7)).strftime(STAMP_FORMAT),
         END_DATE: (datetime.today()).strftime(STAMP_FORMAT),
     }
     logger.info(f"Getting {url} with parameters {param_dict} ...")
-    response = get(url, headers=HEADER_DICT, params=param_dict)
+    data_list = get(url, headers=HEADER_DICT, params=param_dict)
     # Iterate over the measured data and write to the database
-    for measurement in response.json()[RESULTS]:
+    for measurement in data_list:
         logger.info(measurement)
         # Publish
         payload = json.dumps(measurement, sort_keys=True, indent=2).encode()
