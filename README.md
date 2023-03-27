@@ -22,12 +22,14 @@ This code uses the following technologies:
   - [Measurements](models/weather/measurement.sql)
   - [Temperatures](models/weather/temperature.sql)
     - The real magic of DBT happens here: because I have defined temperature data to rely on station, measurement type and measurement, it knows to load that foundational data first, *then* it loads the temperature data.
+
 ![data flow](images/DBT_and_GCP_Data_Flow.png)
 
 # Potential improvements
 - Run on a schedule via Google Run.
 - Use protobufs (https://protobuf.dev/)
 - ~~The NOAA API limits results to 1000 items; add code to paginate to get all records.~~
+- ~~Log to Google Cloud logging.~~
 - Query the database to determine what date to start from (right now we just assume we will run at least every 7 days).
 - Put credentials file, logging level, etc. into a config file.
 - Put credentials file and NOAA REST API token into Google Secrets Manager.

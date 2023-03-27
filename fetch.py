@@ -13,6 +13,8 @@ from time import sleep
 # Imports below are 3rd-party
 from retry import retry
 from google.cloud import pubsub_v1
+import google.cloud.logging
+from google.cloud.logging.handlers import CloudLoggingHandler
 
 GOOGLE_APPLICATION_CREDENTIALS_FILE = "credentials.json"
 BASE_URL = "https://www.ncei.noaa.gov/cdo-web/api/v2"
@@ -24,7 +26,6 @@ END_DATE = "enddate"
 STAMP_FORMAT = "%Y-%m-%d"
 HEADER_DICT = {
     "token": open(TOKEN_FILE).read().strip(),
-    # "includemetadata": "false",
 }
 PROJECT_ID = "verdant-bond-262820"
 TOPIC = "weather"
@@ -34,14 +35,18 @@ PUBSUB_TOPIC_NAME = f"projects/{PROJECT_ID}/topics/{TOPIC}"
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(pathlib.Path(__file__).parent / GOOGLE_APPLICATION_CREDENTIALS_FILE)
 
 # Set up logging
-logger = logging.getLogger()
+log_name = os.path.basename(__file__)
+gcloud_logging_client = google.cloud.logging.Client()
+# Google logging
+gcloud_logging_handler = CloudLoggingHandler(gcloud_logging_client, name=log_name)
+# Console logging
+stream_handler = logging.StreamHandler()
+stream_handler.setLevel(logging.WARNING)
+# Add handlers
+logger = logging.getLogger(log_name)
 logger.setLevel(logging.DEBUG)
-handler = logging.StreamHandler()
-formatter = logging.Formatter('%(asctime)s | %(levelname)8s | %(message)s', datefmt='%Y-%m-%d %H:%M:%S %Z')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-# handler.setLevel(logging.DEBUG)
-
+logger.addHandler(gcloud_logging_handler)
+logger.addHandler(stream_handler)
 
 @retry()
 def get(url,
@@ -92,7 +97,7 @@ param_dict = {
     END_DATE: datetime(2000, 1, 1).strftime(STAMP_FORMAT),
 }
 logger.info(f"Getting {url} with parameters {param_dict} ...")
-data_list = get(url, headers=HEADER_DICT, params=param_dict)
+data_list = get(url, params=param_dict)
 for datatype in data_list:
     logger.debug(datatype)
     payload = json.dumps(datatype, sort_keys=True, indent=2).encode()
@@ -109,7 +114,7 @@ param_dict = {
     START_DATE: (datetime.today() - timedelta(7)).strftime(STAMP_FORMAT),
 }
 logger.info(f"Getting {url} with parameters {param_dict} ...")
-data_list = get(url, headers=HEADER_DICT, params=param_dict)
+data_list = get(url, params=param_dict)
 
 for station in data_list:
     payload = json.dumps(station, sort_keys=True, indent=2).encode()
@@ -125,7 +130,7 @@ for station in data_list:
         END_DATE: (datetime.today()).strftime(STAMP_FORMAT),
     }
     logger.info(f"Getting {url} with parameters {param_dict} ...")
-    data_list = get(url, headers=HEADER_DICT, params=param_dict)
+    data_list = get(url, params=param_dict)
     # Iterate over the measured data and write to the database
     for measurement in data_list:
         logger.info(measurement)
