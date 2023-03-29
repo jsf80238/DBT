@@ -8,9 +8,9 @@ This code uses the following technologies:
 # Data Flow
 - I fetch a) weather station, b) weather measurement type (what the NOAA calls the datatype) and c) measurements from the NOAA REST API. I publish this information as messages to a Google PubSub topic.
   - See [fetch.py](fetch.py).
-  - This code can run on a VM, [Google Cloud Run](https://cloud.google.com/run/) instance, or a GKE cluster. I think a GKE cluster is overkill for this workload. A Google Run instance is a nice step up from a VM. It would take it's code directly from GitHub.
-  - With a VM I schedule with crontab. With a Google Cloud Run instance I would schedule with [Google Cloud Scheduler](https://cloud.google.com/scheduler).
-  - All messages are sent to a single PubSub topic, distinguished by the record type.
+  - This code can run on a VM or a container such as [AWS Fargate](https://aws.amazon.com/fargate/) or [Google Cloud Run](https://cloud.google.com/run/).
+  - With a VM I schedule with crontab. With Fargate or Cloud Run I would schedule with [EventBridge](https://docs.aws.amazon.com/AmazonECS/latest/userguide/scheduled_tasks.html) or [Google Cloud Scheduler](https://cloud.google.com/scheduler).
+  - All messages are sent to a single message queue topic (Google PubSub, could also use [AWS SQS](https://aws.amazon.com/sqs/), distinguished by the record type.
 - I configured the Google PubSub topic to write the messages directly to a Google BigQuery table.
   - The 5-column [target table schema](sql/weather_ods.source.sql) is [defined by Google](https://cloud.google.com/pubsub/docs/bigquery#properties_subscription).
   - You can also [manipulate the data with Google DataFlow](https://cloud.google.com/dataflow/docs/tutorials/dataflow-stream-to-bigquery) before it lands in BigQuery. I prefer to go straight to a BigQuery table (or cloud storage) rather than add a step which could cause a failure.
@@ -23,10 +23,13 @@ This code uses the following technologies:
   - [Temperatures](models/weather/temperature.sql)
     - The real magic of DBT happens here: because I have defined temperature data to rely on station, measurement type and measurement, it knows to load that foundational data first, *then* it loads the temperature data.
 
+| Note                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| In the diagram below the ODS and DW are shown as different databases, but it is a logical separation only.<br/>In Snowflake and Redshift these would be two databases in the same database cluster or two schemas in the same database.<br/>In BigQuery these would be two datasets in the same project or two schemas in the same dataset.<br/>DBT is generating and executing the SQL which selects from ODS and DW tables and writes to DW tables. |
 ![data flow](images/DBT_and_GCP_Data_Flow.png)
 
 # Potential improvements
-- Run on a schedule via Google Run.
+- Run on a schedule via Fargate or Google Run.
 - Use protobufs (https://protobuf.dev/)
 - ~~The NOAA API limits results to 1000 items; add code to paginate to get all records.~~
 - ~~Log to Google Cloud logging.~~
