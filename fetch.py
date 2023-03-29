@@ -49,6 +49,9 @@ logger.setLevel(logging.DEBUG)
 logger.addHandler(gcloud_logging_handler)
 logger.addHandler(stream_handler)
 
+# Count number of API calls, NOAA has a daily limit
+call_count = 0
+
 
 @retry(tries=3, delay=2, backoff=2, logger=logger)
 def get(url,
@@ -60,10 +63,6 @@ def get(url,
     :param url: NOAA URL
     :param headers: authentication
     :param params: dictionary telling NOAA what data we want
-    :param tries: see https://pypi.org/project/retry/
-    :param delay: see https://pypi.org/project/retry/
-    :param backoff: see https://pypi.org/project/retry/
-    :param logger: see https://pypi.org/project/retry/
     :return: the data from the API call
     """
     METADATA = "metadata"
@@ -72,6 +71,10 @@ def get(url,
     return_list = list()
     offset = 1
     params["limit"] = LIMIT  # See NOAA documentation
+
+    global call_count
+    call_count += 1
+
     while True:
         params[OFFSET] = offset
         response = requests.get(url, headers=headers, params=params, timeout=timeout)
@@ -130,7 +133,12 @@ for station in data_list:
         END_DATE: (datetime.today()).strftime(STAMP_FORMAT),
     }
     logger.info(f"Getting {url} with parameters {param_dict} ...")
-    data_list = get(url, params=param_dict)
+    try:
+        data_list = get(url, params=param_dict)
+    except Exception as e:
+        # It's okay if we cannot get a particular station's measurements, just log it
+        logger.error(f"Skipping station '{station['id']}': {e}.")
+        continue
     # Iterate over the measured data and write to the database
     for measurement in data_list:
         logger.info(measurement)
@@ -138,3 +146,5 @@ for station in data_list:
         payload = json.dumps(measurement, sort_keys=True, indent=2).encode()
         future = publisher.publish(PUBSUB_TOPIC_NAME, payload, record_type="measurement")
         logger.info(f"Successfully posted message_id: {future.result()}.")
+
+logger.info(f"Finished. Made {call_count} API calls.")
