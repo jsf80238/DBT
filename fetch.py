@@ -137,7 +137,7 @@ for station in data_list:
         data_list = get(url, params=param_dict)
     except Exception as e:
         # It's okay if we cannot get a particular station's measurements, just log it
-        logger.error(f"Skipping station '{station['id']}': {e}.")
+        logger.error(f"Skipping station '{station['id']}', error message was: {e}.")
         continue
     # Iterate over the measured data and write to the database
     for measurement in data_list:
