@@ -16,7 +16,6 @@ from google.cloud import pubsub_v1
 import google.cloud.logging
 from google.cloud.logging.handlers import CloudLoggingHandler
 
-GOOGLE_APPLICATION_CREDENTIALS_FILE = "credentials.json"
 BASE_URL = "https://www.ncei.noaa.gov/cdo-web/api/v2"
 TOKEN_FILE = "NCDC_CDO_web_services_token"
 DATA_SET_ID = "GHCND"  # daily summaries
@@ -31,7 +30,8 @@ PROJECT_ID = "verdant-bond-262820"
 TOPIC = "weather"
 PUBSUB_TOPIC_NAME = f"projects/{PROJECT_ID}/topics/{TOPIC}"
 
-# Set up Google credentials
+# Set up Google credentials allowing us to log to Google and publish to PubSub
+GOOGLE_APPLICATION_CREDENTIALS_FILE = "credentials.json"
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(pathlib.Path(__file__).parent / GOOGLE_APPLICATION_CREDENTIALS_FILE)
 
 # Set up logging
@@ -39,28 +39,27 @@ log_name = os.path.basename(__file__)
 gcloud_logging_client = google.cloud.logging.Client()
 # Google logging
 gcloud_logging_handler = CloudLoggingHandler(gcloud_logging_client, name=log_name)
+gcloud_logging_handler.setLevel(logging.INFO)
 # Console logging
 stream_handler = logging.StreamHandler()
-stream_handler.setLevel(logging.WARNING)
+stream_handler.setLevel(logging.DEBUG)
 # Add handlers
 logger = logging.getLogger(log_name)
 logger.setLevel(logging.DEBUG)
 logger.addHandler(gcloud_logging_handler)
 logger.addHandler(stream_handler)
 
-@retry()
+
+@retry(tries=3, delay=2, backoff=2, logger=logger)
 def get(url,
         headers=HEADER_DICT,
         params=None,
-        tries=3,
-        delay=2,
-        backoff=2,
-        logger=logger,
+        timeout=10,  # seconds
         ) -> list[dict]:
     """
     :param url: NOAA URL
     :param headers: authentication
-    :param params: tells NOAA what data we want
+    :param params: dictionary telling NOAA what data we want
     :param tries: see https://pypi.org/project/retry/
     :param delay: see https://pypi.org/project/retry/
     :param backoff: see https://pypi.org/project/retry/
@@ -75,7 +74,8 @@ def get(url,
     params["limit"] = LIMIT  # See NOAA documentation
     while True:
         params[OFFSET] = offset
-        response = requests.get(url, headers=headers, params=param_dict)
+        response = requests.get(url, headers=headers, params=params, timeout=timeout)
+        logger.debug(response.status_code)
         response.raise_for_status()
         # logger.debug(response.json()[METADATA])
         return_list.extend(response.json()["results"])
