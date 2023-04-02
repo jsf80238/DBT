@@ -1,14 +1,9 @@
-<<<<<<< HEAD
-
-target/
-dbt_packages/
-logs/
-=======
 target/
 dbt_modules/
 dbt_packages/
 logs/
 verdant-bond*.json
 *credentials*.json
-NCDC_CDO_web_sebbrvices_token
->>>>>>> 329debb9b099d60176794a7111f8cd54558c1308
+NCDC_CDO_web_services_token
+.idea/**
+.terraform/**

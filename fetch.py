@@ -1,7 +1,6 @@
 """
 See API documentation at https://www.ncdc.noaa.gov/cdo-web/webservices/v2#data
 """
-import sys
 from datetime import datetime, timedelta
 import json
 import logging
@@ -116,6 +115,7 @@ def run():
     data_list = get(url, params=param_dict)
     for datatype in data_list:
         logger.debug(datatype)
+        # Publish datatype (measurement type) information
         payload = json.dumps(datatype, sort_keys=True, indent=2).encode()
         future = publisher.publish(PUBSUB_TOPIC_NAME, payload, record_type="datatype")
         logger.info(f"Successfully posted message_id: {future.result()}.")
@@ -133,6 +133,7 @@ def run():
     data_list = get(url, params=param_dict)
 
     for station in data_list:
+        # Publish station information
         payload = json.dumps(station, sort_keys=True, indent=2).encode()
         future = publisher.publish(PUBSUB_TOPIC_NAME, payload, record_type="station")
         logger.info(f"Successfully posted message_id: {future.result()}.")
@@ -157,13 +158,13 @@ def run():
         # Iterate over the measured data and write to the database
         for measurement in data_list:
             logger.info(measurement)
-            # Publish
+            # Publish measurement for this datatype at this station on this day
             payload = json.dumps(measurement, sort_keys=True, indent=2).encode()
             future = publisher.publish(PUBSUB_TOPIC_NAME, payload, record_type="measurement")
             logger.info(f"Successfully posted message_id: {future.result()}.")
 
     duration = int(time.monotonic() - start_time)
-    logger.info(f"Finished. Made {call_count} API calls.")
+    logger.info(f"Finished in {duration} seconds. Made {call_count} API calls with {error_count} errors.")
     return {
         "api_call_count": call_count,
         "error_count": error_count,

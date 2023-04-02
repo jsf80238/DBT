@@ -2,35 +2,31 @@
 version: 2
 
 models:
-    - name: measurement_type_dim
-      description: "Type of measurement, such as temperature or precipitation"
-      columns:
-          - name: id
-            description: "The primary key for this table"
-            tests:
-                - unique
-                - not_null
-    - name: station_dim
-      description: "Weather stations"
-      columns:
-          - name: id
-            description: "The primary key for this table"
-            tests:
-                - unique
-                - not_null
-    - name: measurement
-      description: "Measurements by station and date"
-      columns:
-          - name: station_id, measurement_type_id, measurement_date
-            description: "The primary key for this table"
-            tests:
-                - unique
-                - not_null
-    - name: temperature
-      description: "Temperatures by station and date"
-      columns:
-          - name: station_id, measurement_type_id, measurement_date
-            description: "The primary key for this table"
-            tests:
-                - unique
-                - not_null
+  - name: measurement_type_dim
+    description: "Measurement types like TMAX"
+    tests:
+      - unique:
+          column_name: id
+      - not_null:
+          column_name: id
+  - name: station_dim
+    description: "Weather stations"
+    tests:
+      - unique:
+          column_name: id
+      - not_null:
+          column_name: id
+  - name: measurement
+    description: "Measurements by station and date"
+    tests:
+      - unique:
+          column_name: "(station_id || measurement_type_id || measurement_date)"
+      - not_null:
+          column_name: "(station_id || measurement_type_id || measurement_date)"
+  - name: temperature
+    description: "Max and min by station and date"
+    tests:
+      - unique:
+          column_name: "(station_id || measurement_type_id || measurement_date)"
+      - not_null:
+          column_name: "(station_id || measurement_type_id || measurement_date)"
