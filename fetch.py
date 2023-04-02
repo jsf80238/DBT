@@ -9,7 +9,6 @@ import os
 import pathlib
 import requests
 import time
-from time import sleep
 # Imports above are standard Python
 # Imports below are 3rd-party
 from retry import retry
