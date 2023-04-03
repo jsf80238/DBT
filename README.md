@@ -18,14 +18,28 @@ This code uses the following technologies:
 - DBT fetches the SQL-like code stored in GitHub, generates the equivalent BigQuery-specific SQL, and executes the statement against my BigQuery database.
   - [General configuration](dbt_project.yml)
   - [Stations](models/weather/station_dim.sql)
+    - Because we may have multiple source rows for each station this query selects the last row for each station.
   - [Measurement types](models/weather/measurement_type_dim.sql)
+    - Because we may have multiple source rows for each measurement type this query selects the last row for each measurement type.
   - [Measurements](models/weather/measurement.sql)
+    - Because we may have multiple source rows for each measurement this query selects the last row for each measurement.
   - [Temperatures](models/weather/temperature.sql)
-    - The real magic of DBT happens here: because I have defined temperature data to rely on station, measurement type and measurement, it knows to load that foundational data first, *then* it loads the temperature data.
+    - The real magic of DBT happens here: because I have defined temperature data to rely on station, measurement type and measurement, DBT knows to load that foundational data first, *then* it loads the temperature data.
+- DBT tests
+  - [Tests](models/weather/weather.yml)
+    - Verifies the primary keys for each dimension table are non-null and unique.
 
-| Note                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| In the diagram below the ODS and DW are shown as different databases, but it is a logical separation only.<br/>In Snowflake and Redshift these would be two databases in the same database cluster or two schemas in the same database.<br/>In BigQuery these would be two datasets in the same project or two schemas in the same dataset.<br/>DBT is generating and executing the SQL which selects from ODS and DW tables and writes to DW tables. |
+## Visualization
+Neither Tableau nor Looker provide a permanently free tier I used Google Data Studio to plot average temperature v. elevation.
+The [results](https://lookerstudio.google.com/reporting/111a125b-70ab-49d0-ad71-456c93d47bf4) are as I expected: as you go up, temperature goes down.
+![temperature_v_elevation](images/temperature_v_elevation.png)
+
+## Architecture
+In the diagram below the ODS and DW are shown as different databases, but it is a logical separation only.
+- In Snowflake and Redshift these would be two databases in the same database cluster or two schemas in the same database.
+- In BigQuery these would be two datasets in the same project or two schemas in the same dataset.
+
+DBT is generating and executing the SQL which selects from ODS and DW tables and writes to DW tables.
 ![data flow](images/DBT_and_GCP_Data_Flow.png)
 
 # Potential improvements
@@ -39,7 +53,7 @@ This code uses the following technologies:
 - Add comments to DDL.
 - Use https://google-auth.readthedocs.io/en/latest/reference/google.auth.credentials.html#google.auth.credentials.Credentials to authenticate.
 - Create surrogate keys for stations (see https://discourse.getdbt.com/t/can-i-create-an-auto-incrementing-id-in-dbt/579/2 and https://docs.getdbt.com/blog/managing-surrogate-keys).
-- Do something interesting with the temperature table, maybe analysis of temperature vs. elevation or latitude.
+- ~~Do something interesting with the temperature table, maybe analysis of temperature vs. elevation or latitude.~~
 - Performance:
   - As weather_ods.measurement grows performance might degrade.
   - Add clustering key.
