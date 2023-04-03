@@ -1,6 +1,7 @@
 """
 See API documentation at https://www.ncdc.noaa.gov/cdo-web/webservices/v2#data
 """
+import collections
 from datetime import datetime, timedelta
 import json
 import logging
@@ -14,6 +15,7 @@ from retry import retry
 from google.cloud import pubsub_v1
 import google.cloud.logging
 from google.cloud.logging.handlers import CloudLoggingHandler
+from google.cloud import bigquery
 from google.cloud import secretmanager
 from flask import Flask
 
@@ -40,10 +42,10 @@ gcloud_logging_handler = CloudLoggingHandler(gcloud_logging_client, name=log_nam
 gcloud_logging_handler.setLevel(logging.INFO)
 # Console logging
 stream_handler = logging.StreamHandler()
-stream_handler.setLevel(logging.DEBUG)
+stream_handler.setLevel(logging.DEBUG)  # Will send debug if set to DEBUG 3 lines up
 # Add handlers
 logger = logging.getLogger(log_name)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG)  # Will send debug if set to DEBUG 6 lines up
 logger.addHandler(gcloud_logging_handler)
 logger.addHandler(stream_handler)
 
@@ -61,40 +63,40 @@ def get(url,
         timeout=10,  # seconds
         ) -> list[dict]:
     """
+    Support the retrieval from the API a record set which may exceed the per-call API limit.
+    Use the retry library to retry before giving up.
     :param url: NOAA URL
     :param headers: authentication
     :param params: dictionary telling NOAA what data we want
-    :param timeout: give up after this many seconds
+    :param timeout: for each GET request give up after this many seconds (separate from retry logic)
     :return: the data from the API call
     """
-    METADATA = "metadata"
-    OFFSET = "offset"
-    LIMIT = 1000
     return_list = list()
     offset = 1
-    params["limit"] = LIMIT  # See NOAA documentation
+    limit = 1000
+    params["limit"] = limit  # See NOAA documentation
 
     global call_count
     call_count += 1
 
     while True:
-        params[OFFSET] = offset
+        params["offset"] = offset
         response = requests.get(url, headers=headers, params=params, timeout=timeout)
-        logger.debug(response.status_code)
+        logger.debug(f"Request status code: {response.status_code}.")
         response.raise_for_status()
-        # logger.debug(response.json()[METADATA])
+        logger.debug(response.json()["metadata"])
         return_list.extend(response.json()["results"])
-        total_available = response.json()[METADATA]["resultset"]["count"]
+        total_available = response.json()["metadata"]["resultset"]["count"]
         if total_available <= len(return_list):
             logger.info(f"Fetched {len(return_list)} records from API.")
             return return_list
-        offset += LIMIT
+        offset += limit
 
 
 # Set-up complete, program starts here
 # Count number of API calls, NOAA has a daily limit
 call_count, error_count = 0, 0
-# Allow invocation via HTTP
+# Allow invocation via HTTP so this code can be invoked when running in a container
 app = Flask(__name__)
 
 
@@ -105,7 +107,7 @@ def run():
     # Create publisher
     publisher = pubsub_v1.PublisherClient()
 
-    # Get the different measurement types we might see (NOAA calls them datatypes)
+    # Fetch via the API the different measurement types we might see (NOAA calls them datatypes)
     url = f"{BASE_URL}/datatypes"
     param_dict = {
         "locationid": COLORADO,
@@ -120,7 +122,7 @@ def run():
         future = publisher.publish(PUBSUB_TOPIC_NAME, payload, record_type="datatype")
         logger.info(f"Successfully posted message_id: {future.result()}.")
 
-    # Iterate over each station in Colorado with data between January 1, 2000 and today
+    # Fetch via the API the stations in Colorado with data between January 1, 2000 and today
     # The enddate and startdate parameters below look reversed but they are correct,
     # see https://www.ncdc.noaa.gov/cdo-web/webservices/v2#stations.
     url = f"{BASE_URL}/stations"
@@ -131,20 +133,37 @@ def run():
     }
     logger.info(f"Getting {url} with parameters {param_dict} ...")
     data_list = get(url, params=param_dict)
-
     for station in data_list:
         # Publish station information
         payload = json.dumps(station, sort_keys=True, indent=2).encode()
         future = publisher.publish(PUBSUB_TOPIC_NAME, payload, record_type="station")
         logger.info(f"Successfully posted message_id: {future.result()}.")
-        logger.info(f"Examining station: {station} ...")
+
+    # Fetch from the target database the station/date combinations which do not exist
+    logger.info(f"Querying the target database to determine what data needs to be fetched ...")
+    missing_dict = collections.defaultdict(list)
+    bigquery_client = bigquery.Client()
+    sql = "select station_id, day_ from weather_dw.missing_temperature_measurements_v"
+    query_job = bigquery_client.query(sql)
+    for row in query_job.result():
+        station_id, day_ = row.values()
+        missing_dict[station_id].append(day_)
+
+    # For each station with one or more days of missing data, fetch it via the API.
+    # To reduce the number of API calls we will fetch a range of dates.
+    # For example, if we are missing data for the 10th, 12th and 14th we will fetch
+    # from the API the 10th, 11th, 12th, 13th and 14th.
+    for station_id, missing_day_list in missing_dict.items():
+        start_date = min(missing_day_list)
+        end_date = max(missing_day_list)
+        logger.info(f"Retrieving data for station {station} for {start_date} through {end_date} ...")
         url = f"{BASE_URL}/data"
         param_dict = {
             "datasetid": DATA_SET_ID,
-            "stationid": station["id"],
+            "stationid": station_id,
             "units": "metric",
-            START_DATE: (datetime.today() - timedelta(7)).strftime(STAMP_FORMAT),
-            END_DATE: (datetime.today()).strftime(STAMP_FORMAT),
+            START_DATE: start_date.strftime(STAMP_FORMAT),
+            END_DATE: end_date.strftime(STAMP_FORMAT),
         }
         logger.info(f"Getting {url} with parameters {param_dict} ...")
         try:
