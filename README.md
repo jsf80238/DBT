@@ -3,6 +3,8 @@ This code uses the following technologies:
 - Python and the [requests](https://requests.readthedocs.io/en/latest/) module
 - Google [PubSub](https://cloud.google.com/pubsub)
 - Google [BigQuery](https://cloud.google.com/bigquery)
+- Google [Cloud Run](https://cloud.google.com/run)
+- Google [Cloud Scheduler](https://cloud.google.com/scheduler)
 - [DBT (Cloud version)](https://cloud.getdbt.com)
 
 # Data Flow
@@ -42,18 +44,37 @@ In the diagram below the ODS and DW are shown as different databases, but it is 
 DBT is generating and executing the SQL which selects from ODS and DW tables and writes to DW tables.
 ![data flow](images/DBT_and_GCP_Data_Flow.png)
 
+## Execution
+You might choose to execute this code in one of three places.
+
+### Locally
+    gcloud auth activate-service-account service-account@my-project.iam.gserviceaccount.com  --key-file=/path/to/credentials.json
+    gcloud auth application-default login
+    python3 fetch.py
+    (curl http://localhost:5000)
+### Docker
+    docker build -t dbt-example .
+    docker run -p 5000:5000 -v /path/to/credentials.json:/credentials.json:ro --env GOOGLE_APPLICATION_CREDENTIALS=/credentials.json dbt-example
+    (curl http://localhost:5000)
+### Google Cloud Run
+Deploy according to instructions:
+- https://cloud.google.com/run/docs/quickstarts/build-and-deploy/deploy-python-service
+- https://cloud.google.com/run/docs/triggering/using-scheduler
+
 # Potential improvements
-- Run on a schedule via Fargate or Google Run.
+- ~~Run on a schedule via Google Run.~~
 - Use protobufs (https://protobuf.dev/)
 - ~~The NOAA API limits results to 1000 items; add code to paginate to get all records.~~
 - ~~Log to Google Cloud logging.~~
-- Query the database to determine what date to start from (right now we just assume we will run at least every 7 days).
+- ~~Query the database to determine what date to start from (right now we just assume we will run at least every 7 days).~~
 - Put credentials file, logging level, etc. into a config file.
-- Put credentials file and NOAA REST API token into Google Secrets Manager.
+- ~~Put NOAA REST API token into Google Secrets Manager.~~
 - Add comments to DDL.
-- Use https://google-auth.readthedocs.io/en/latest/reference/google.auth.credentials.html#google.auth.credentials.Credentials to authenticate.
+- ~~Use https://google-auth.readthedocs.io/en/latest/reference/google.auth.credentials.html#google.auth.credentials.Credentials to authenticate.~~
 - Create surrogate keys for stations (see https://discourse.getdbt.com/t/can-i-create-an-auto-incrementing-id-in-dbt/579/2 and https://docs.getdbt.com/blog/managing-surrogate-keys).
 - ~~Do something interesting with the temperature table, maybe analysis of temperature vs. elevation or latitude.~~
+- Use Terraform to script the build of the Google infrastructure which was created by hand.
+- The Cloud Run instance max run time is 30 minutes.<br>The data collection may not complete in that time.<br>The Google console will show a failure even though the underlying `fetch.py` will continue to run and collect data.<br>It would be nice to find a way to make that look cleaner.
+- The Cloud Run instance will start any time it is rebuilt.<br>Although the code is idempotent it would be nice to have the option to not run upon deployment.
 - Performance:
-  - As weather_ods.measurement grows performance might degrade.
-  - Add clustering key.
+  - As `weather_ods.measurement` grows performance might degrade.<br>Perhaps add a clustering key.
