@@ -31,8 +31,19 @@ TOPIC = "weather"
 PUBSUB_TOPIC_NAME = f"projects/{PROJECT_ID}/topics/{TOPIC}"
 
 # Set up Google credentials allowing us to log to Google and publish to PubSub
-GOOGLE_APPLICATION_CREDENTIALS_FILE = "credentials.json"
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(pathlib.Path(__file__).parent / GOOGLE_APPLICATION_CREDENTIALS_FILE)
+# GOOGLE_APPLICATION_CREDENTIALS_FILE = "credentials.json"
+# os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(pathlib.Path(__file__).parent / GOOGLE_APPLICATION_CREDENTIALS_FILE)
+"""
+Above commands "replaced" by doing from the command-line:
+  gcloud auth activate-service-account service-account@my-project.iam.gserviceaccount.com  --key-file=/path/to/credentials.json
+  gcloud auth application-default login
+This allows the program to be launched via the command line.
+  python3 fetch.py
+
+Then to run this program via a Docker container:
+  docker build -t dbt-example .
+  docker run -p 5000:5000 -v /path/to/credentials.json:/credentials.json:ro --env GOOGLE_APPLICATION_CREDENTIALS=/credentials.json dbt-example
+"""
 
 # Set up logging
 log_name = os.path.basename(__file__)
