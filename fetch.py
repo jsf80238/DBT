@@ -49,6 +49,7 @@ logger = logging.getLogger(log_name)
 logger.setLevel(logging.DEBUG)  # Will send debug if set to DEBUG 6 lines up
 logger.addHandler(gcloud_logging_handler)
 logger.addHandler(stream_handler)
+logger.info(f"Starting {__file__} ...")
 
 # Get our NOAA API token for the API call header
 client = secretmanager.SecretManagerServiceClient()
