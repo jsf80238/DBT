@@ -29,6 +29,7 @@ STAMP_FORMAT = "%Y-%m-%d"
 PROJECT_ID = "verdant-bond-262820"
 TOPIC = "weather"
 PUBSUB_TOPIC_NAME = f"projects/{PROJECT_ID}/topics/{TOPIC}"
+DEFAULT_LISTENING_PORT = 5000
 
 # Set up Google credentials allowing us to log to Google and publish to PubSub
 # GOOGLE_APPLICATION_CREDENTIALS_FILE = "credentials.json"
@@ -193,4 +194,4 @@ def run():
 
 if __name__ == "__main__":
     app.debug = True
-    app.run()
+    app.run(port=int(os.environ.get("PORT", DEFAULT_LISTENING_PORT)), host="0.0.0.0")
